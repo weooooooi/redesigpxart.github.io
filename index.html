@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>黑色轮廓像素化头像（自定义颜色）</title>
+  <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin: 0;
+      padding: 10px;
+      height: 100vh;
+      background-color: #007bff;
+      box-sizing: border-box;
+    }
+    .container {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    video {
+      display: none;
+    }
+    canvas {
+      border: 2px solid black;
+      background-color: white;
+    }
+    .switch-camera {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      width: 50px;
+      height: 50px;
+      background-color: white;
+      border: 2px solid black;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    .controls {
+      margin-top: 20px;
+      text-align: center;
+    }
+    .controls label {
+      display: block;
+      margin-bottom: 10px;
+    }
+    input[type="range"], input[type="color"] {
+      margin-left: 10px;
+    }
+    button {
+      margin-top: 10px;
+      padding: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <video id="video" autoplay muted playsinline></video>
+    <canvas id="canvas" width="300" height="300"></canvas>
+    <div class="switch-camera" id="switchCamera">🔁</div>
+  </div>
+  <div class="controls">
+    <label>
+      像素块大小:
+      <input type="range" id="blockSize" min="5" max="50" value="10">
+    </label>
+    <button id="download">保存图片</button>
+  </div>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const switchCameraButton = document.getElementById('switchCamera');
+    const blockSizeInput = document.getElementById('blockSize');
+    const downloadButton = document.getElementById('download');
+
+    let blockSize = parseInt(blockSizeInput.value, 10);
+    let usingFrontCamera = true;
+
+    async function startCamera(front = true) {
+      try {
+        const constraints = {
+          video: {
+            width: 300,
+            height: 300,
+            facingMode: front ? 'user' : 'environment'
+          }
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          video.play();
+          processVideoFrame(); // 视频加载后开始处理帧
+        };
+      } catch (err) {
+        console.error("无法访问摄像头:", err);
+        alert("无法访问摄像头，请检查权限设置或设备连接。");
+      }
+    }
+
+    function processVideoFrame() {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        // 将视频帧绘制到画布
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // 获取画布图像数据
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const pixels = imageData.data;
+
+        // 遍历像素块
+        for (let y = 0; y < canvas.height; y += blockSize) {
+          for (let x = 0; x < canvas.width; x += blockSize) {
+            let rSum = 0, gSum = 0, bSum = 0, count = 0;
+
+            // 遍历像素块中的每个像素
+            for (let dy = 0; dy < blockSize; dy++) {
+              for (let dx = 0; dx < blockSize; dx++) {
+                const pxIndex = 4 * ((y + dy) * canvas.width + (x + dx));
+                if (pxIndex < pixels.length) {
+                  rSum += pixels[pxIndex];     // 红色通道
+                  gSum += pixels[pxIndex + 1]; // 绿色通道
+                  bSum += pixels[pxIndex + 2]; // 蓝色通道
+                  count++;
+                }
+              }
+            }
+
+            // 计算像素块的平均颜色
+            const rAvg = rSum / count;
+            const gAvg = gSum / count;
+            const bAvg = bSum / count;
+
+            // 设置填充颜色并绘制像素块
+            ctx.fillStyle = `rgb(${rAvg}, ${gAvg}, ${bAvg})`;
+            ctx.fillRect(x, y, blockSize, blockSize);
+          }
+        }
+      }
+
+      // 持续处理下一帧
+      requestAnimationFrame(processVideoFrame);
+    }
+
+    blockSizeInput.addEventListener('input', () => {
+      blockSize = parseInt(blockSizeInput.value, 10);
+    });
+
+    downloadButton.addEventListener('click', () => {
+      const link = document.createElement('a');
+      link.download = 'pixel_avatar.png';
+      link.href = canvas.toDataURL();
+      link.click();
+    });
+
+    switchCameraButton.addEventListener('click', () => {
+      usingFrontCamera = !usingFrontCamera;
+      startCamera(usingFrontCamera);
+    });
+
+    // 初始化摄像头
+    startCamera();
+  </script>
+</body>
+</html>
